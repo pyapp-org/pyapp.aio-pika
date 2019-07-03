@@ -1,0 +1,7 @@
+__pycache__
+.idea
+.python-version
+.coverage
+.pytest_cache
+.eggs
+*.egg-info
