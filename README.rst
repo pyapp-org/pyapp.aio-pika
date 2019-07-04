@@ -34,6 +34,10 @@ Usage
 API
 ===
 
-`pyapp_ext.aio_pika.do_foo(name: str)`
-
-    Documentation of do foo!
+`pyapp_ext.aio_pika.get_robust_connection(name: str = None) -> Connection`
+   
+      Get a "robust" connection from AIO Pika
+      
+`pyapp_ext.aio_pika.get_connection(name: str = None) -> Connection`
+ 
+      Get a connection from AIO Pika
