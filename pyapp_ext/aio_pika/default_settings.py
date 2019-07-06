@@ -1,11 +1,13 @@
-AMQP = {"default": {}}
+AMQP = {"default": {
+    "url": "amqp://localhost:5672",
+}}
 """
 Named sets of connection arguments for AIO-Pika AMQP connection.
 
 Use either a URL or broken out connection eg::
 
     AMQP = {"default": {
-        "url": "amqp://localhost:5672,
+        "url": "amqp://localhost:5672",
     }}
 
     # or

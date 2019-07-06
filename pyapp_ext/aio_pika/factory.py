@@ -1,12 +1,12 @@
 from functools import partial
-from pyapp.conf.helpers import NamedFactory
+from pyapp.conf.helpers import ThreadLocalNamedSingletonFactory
 
 from aio_pika import connect_robust, Connection
 
 __all__ = ("Connection", "get_connection", "get_robust_connection", "connection_factory")
 
 
-class ConnectionFactory(NamedFactory[Connection]):
+class ConnectionFactory(ThreadLocalNamedSingletonFactory[Connection]):
     """
     Factory for creating Connection.
     """
