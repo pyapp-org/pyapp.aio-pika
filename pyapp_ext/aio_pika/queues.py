@@ -1,5 +1,5 @@
 from aio_pika import Channel, Connection, Exchange, Message, ExchangeType
-from typing import Optional
+from typing import Optional, Union
 
 from pyapp_ext.messaging.asyncio import bases
 
@@ -83,11 +83,14 @@ class AMQPPublish(AMQPBase):
         await super().close()
 
     async def send_raw(
-        self, body: bytes, *, content_type: str = None, content_encoding: str = None
+        self, body: Union[str, bytes], *, content_type: str = None, content_encoding: str = None
     ):
         """
         Publish a raw message (message is raw bytes)
         """
+        if isinstance(body, str):
+            body = body.encode()
+
         await self._exchange.publish(
             Message(body, content_type=content_type, content_encoding=content_encoding),
             self.routing_key,
