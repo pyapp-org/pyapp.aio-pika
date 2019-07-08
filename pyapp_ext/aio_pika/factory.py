@@ -14,12 +14,12 @@ class ConnectionFactory(ThreadLocalNamedSingletonFactory[Connection]):
     defaults = {
         "host": 'localhost',
         "port": 5672,
-        "login": 'guest',
-        "password": 'guest',
         "virtualhost": '/',
     }
     optional_keys = {
         "url",
+        "login",
+        "password",
         "ssl",
         "ssl_options"
     }
