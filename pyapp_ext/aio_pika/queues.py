@@ -121,7 +121,7 @@ class MessagePublisher(AMQPPublish, bases.MessagePublisher):
     async def open(self):
         await super().open()
         self._exchange = await self._channel.declare_exchange(
-            self.queue_name, type=ExchangeType.FANOUT, durable=False
+            self.queue_name, type=ExchangeType.FANOUT, durable=True
         )
 
 
