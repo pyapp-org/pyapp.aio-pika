@@ -1,9 +1,5 @@
-# from pickle import dumps as serialise, loads as deserialise
-import asyncio
-from json import dumps as serialise, loads as deserialise
-
-from aio_pika import Channel, Connection, Exchange, Message, IncomingMessage, ExchangeType
-from typing import Sequence, Optional, Dict, Any
+from aio_pika import Channel, Connection, Exchange, Message, ExchangeType
+from typing import Optional
 
 from pyapp_ext.messaging.asyncio import bases
 
@@ -12,7 +8,7 @@ from .factory import get_robust_connection
 __all__ = ("MessageSender", "MessageReceiver", "MessagePublisher", "MessageSubscriber")
 
 
-class MessageBase:
+class AMQPBase:
     """
     Base Message Queue
     """
@@ -20,17 +16,17 @@ class MessageBase:
     __slots__ = (
         "amqp_config",
         "channel_number",
+        "routing_key",
         "_connection",
         "_channel",
     )
 
     def __init__(
-        self,
-        amqp_config: str = None,
-        channel_number: int = None,
+        self, amqp_config: str = None, channel_number: int = None, routing_key: str = ""
     ):
         self.amqp_config = amqp_config
         self.channel_number = channel_number
+        self.routing_key = routing_key
 
         self._connection: Optional[Connection] = None
         self._channel: Optional[Channel] = None
@@ -54,58 +50,91 @@ class MessageBase:
             self._connection = None
 
 
-class MessageSender(MessageBase, bases.MessageSender):
+class AMQPPublish(AMQPBase):
     """
     AIO Pika based message sender/publisher.
 
-    With AMQP senders and publishers are the same.
+    :param queue_name: Name of the exchange to subscribe to.
+    :param routing_key: Optional routing key for more complex configurations
+    :param amqp_config: Specific AMQP config setting name
+    :param channel_number: Specify a specific channel number
 
     """
 
-    __slots__ = ("routing_key", "exchange_name")
+    __slots__ = ("queue_name", "_exchange")
 
     def __init__(
         self,
         *,
-        routing_key: str,
+        queue_name: str,
+        routing_key: str = "",
         amqp_config: str = None,
         channel_number: int = None,
-        exchange_name: str = None
     ):
-        super().__init__(amqp_config, channel_number)
-        self.routing_key = routing_key
-        self.exchange_name = exchange_name
+        super().__init__(amqp_config, channel_number, routing_key)
+        self.queue_name = queue_name
 
-    async def exchange(self) -> Exchange:
-        """
-        Declare exchange instance.
-        """
-        if self.exchange_name:
-            return await self._channel.declare_exchange(
-                self.exchange_name,
-                type=ExchangeType.DIRECT,
-                durable=True
-            )
-        else:
-            return self._channel.default_exchange
+        self._exchange: Optional[Exchange] = None
 
-    async def publish_raw(self, body: bytes, *, content_type: str = None):
+    async def close(self):
+        if self._exchange:
+            self._exchange = None
+
+        await super().close()
+
+    async def send_raw(
+        self, body: bytes, *, content_type: str = None, content_encoding: str = None
+    ):
         """
         Publish a raw message (message is raw bytes)
         """
-        exchange = await self.exchange()
-        await exchange.publish(Message(body, content_type=content_type), self.routing_key)
+        await self._exchange.publish(
+            Message(body, content_type=content_type, content_encoding=content_encoding),
+            self.routing_key,
+        )
 
-    async def send(self, kwargs: Dict[str, Any]):
-        """
-        Send a message
-        """
-        await self.publish_raw(serialise(kwargs).encode(), content_type="application/json")
+    publish_raw = send_raw
 
 
-class MessageReceiver(MessageBase, bases.MessageReceiver):
+class MessageSender(AMQPPublish, bases.MessageSender):
+    """
+    AIO Pika based message sender.
+    """
+
+    __slots__ = ()
+
+    async def open(self):
+        await super().open()
+
+        self._exchange = await self._channel.declare_exchange(
+            self.queue_name, type=ExchangeType.DIRECT, durable=True
+        )
+
+
+class MessagePublisher(AMQPPublish, bases.MessagePublisher):
+    """
+    AIO Pika based message sender/publisher.
+    """
+
+    __slots__ = ()
+
+    async def open(self):
+        await super().open()
+        self._exchange = await self._channel.declare_exchange(
+            self.queue_name, type=ExchangeType.FANOUT, durable=False
+        )
+
+
+class AMQPListener(AMQPBase):
     """
     AIO Pika based message receiver
+
+    :param queue_name: Name of the exchange to subscribe to.
+    :param routing_key: Optional routing key for more complex routing.
+    :param prefetch_count: Number of messages to fetch at a time.
+    :param amqp_config: Specific AMQP config setting name
+    :param channel_number: Specify a specific channel number
+
     """
 
     __slots__ = ("queue_name", "prefetch_count")
@@ -114,11 +143,12 @@ class MessageReceiver(MessageBase, bases.MessageReceiver):
         self,
         *,
         queue_name: str,
+        routing_key: str = "",
         prefetch_count: int = 1,
         amqp_config: str = None,
-        channel_number: int = None
+        channel_number: int = None,
     ):
-        super().__init__(amqp_config, channel_number)
+        super().__init__(amqp_config, channel_number, routing_key)
         self.queue_name = queue_name
         self.prefetch_count = prefetch_count
 
@@ -126,104 +156,38 @@ class MessageReceiver(MessageBase, bases.MessageReceiver):
         await super().open()
         await self._channel.set_qos(prefetch_count=self.prefetch_count)
 
-    async def receive(self, message: IncomingMessage):
-        async with message.process():
-            print(message.body)
-            await asyncio.sleep(1)
+    async def queue(self):
+        return await self._channel.declare_queue(self.queue_name)
 
     async def listen(self):
         """
         Listen for messages.
         """
-        queue = await self._channel.declare_queue(self.queue_name)
+        queue = await self.queue()
+        await queue.bind(self.queue_name, self.routing_key)
+
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
-                await self.receive(message)
+                async with message.process():
+                    await self.receive(
+                        message.body, message.content_type, message.content_encoding
+                    )
 
 
-class MessagePublisher(MessageBase, bases.MessagePublisher):
+class MessageReceiver(AMQPListener, bases.MessageReceiver):
     """
-    AIO Pika based message sender/publisher.
-
-    With AMQP senders and publishers are the same.
-
+    AIO Pika based message receiver
     """
 
-    __slots__ = ("routing_key", "exchange_name")
-
-    def __init__(
-        self,
-        *,
-        routing_key: str,
-        amqp_config: str = None,
-        channel_number: int = None,
-        exchange_name: str = None
-    ):
-        super().__init__(amqp_config, channel_number)
-        self.routing_key = routing_key
-        self.exchange_name = exchange_name
-
-    async def exchange(self) -> Exchange:
-        """
-        Declare exchange instance.
-        """
-        if self.exchange_name:
-            return await self._channel.declare_exchange(
-                self.exchange_name,
-                type=ExchangeType.FANOUT,
-                durable=False,
-            )
-        else:
-            return self._channel.default_exchange
-
-    async def publish_raw(self, body: bytes, *, content_type: str = None):
-        """
-        Publish a raw message (message is raw bytes)
-        """
-        exchange = await self.exchange()
-        await exchange.publish(Message(body, content_type=content_type), self.routing_key)
-
-    async def publish(self, kwargs: Dict[str, Any]):
-        """
-        Publish a message
-        """
-        await self.publish_raw(serialise(kwargs).encode(), content_type="application/json")
+    __slots__ = ()
 
 
-class MessageSubscriber(MessageBase, bases.MessageSubscriber):
+class MessageSubscriber(AMQPListener, bases.MessageSubscriber):
     """
     AIO Pika based message subscriber
     """
 
-    __slots__ = ("exchange_name", "prefetch_count")
+    __slots__ = ()
 
-    def __init__(
-        self,
-        *,
-        exchange_name: str,
-        prefetch_count: int = 1,
-        amqp_config: str = None,
-        channel_number: int = None
-    ):
-        super().__init__(amqp_config, channel_number)
-        self.exchange_name = exchange_name
-        self.prefetch_count = prefetch_count
-
-    async def open(self):
-        await super().open()
-        await self._channel.set_qos(prefetch_count=self.prefetch_count)
-
-    async def receive(self, message: IncomingMessage):
-        async with message.process():
-            print(message.body)
-            await asyncio.sleep(1)
-
-    async def subscribe(self, topic: str):
-        queue = await self._channel.declare_queue(exclusive=True)
-        await queue.bind(self.exchange_name)
-        async with queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                await self.receive(message)
-
-    async def cancel_subscription(self, topic: str):
-        pass
+    async def queue(self):
+        return await self._channel.declare_queue(exclusive=True)
