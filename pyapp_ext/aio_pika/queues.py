@@ -83,7 +83,11 @@ class AMQPPublish(AMQPBase):
         await super().close()
 
     async def send_raw(
-        self, body: Union[str, bytes], *, content_type: str = None, content_encoding: str = None
+        self,
+        body: Union[str, bytes],
+        *,
+        content_type: str = None,
+        content_encoding: str = None,
     ):
         """
         Publish a raw message (message is raw bytes)

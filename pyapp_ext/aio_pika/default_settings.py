@@ -1,6 +1,4 @@
-AMQP = {"default": {
-    "url": "amqp://localhost:5672",
-}}
+AMQP = {"default": {"url": "amqp://localhost:5672"}}
 """
 Named sets of connection arguments for AIO-Pika AMQP connection.
 
