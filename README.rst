@@ -47,19 +47,19 @@ To use the messaging interface use the factories defined by
 
 Both AsyncIO Message and Pub/Sub queue types are supported.
 
-`pyapp_ext.messaging.asyncio.MessageSender`
+`pyapp_ext.messaging.asyncio.DirectSender`
 
-    Message queue sender, uses a direct exchange.
+    Message sender, uses a direct exchange.
 
-`pyapp_ext.messaging.asyncio.MessageReceiver`
-
-    Message queue receiver, uses a persistent queue linked to an exchange.
-
-`pyapp_ext.messaging.asyncio.MessagePublisher`
+`pyapp_ext.messaging.asyncio.FanOutReceiver`
 
     Pub/Sub queue publisher, uses fan-out exchange.
 
-`pyapp_ext.messaging.asyncio.MessageSubscriber`
+`pyapp_ext.messaging.asyncio.Receiver`
+
+    Message receiver, uses a persistent queue linked to an exchange.
+
+`pyapp_ext.messaging.asyncio.FanOutReceiver`
 
     Pub/Sub queue subscriber, uses a exclusive queue linked to an exchange.
 

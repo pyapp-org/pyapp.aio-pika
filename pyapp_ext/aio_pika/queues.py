@@ -5,7 +5,7 @@ from pyapp_ext.messaging.asyncio import bases
 
 from .factory import get_robust_connection
 
-__all__ = ("MessageSender", "MessageReceiver", "MessagePublisher", "MessageSubscriber")
+__all__ = ("DirectSender", "FanOutSender", "Receiver", "FanOutReceiver")
 
 
 class AMQPBase:
@@ -103,7 +103,7 @@ class AMQPPublish(AMQPBase):
     publish_raw = send_raw
 
 
-class MessageSender(AMQPPublish, bases.MessageSender):
+class DirectSender(AMQPPublish, bases.MessageSender):
     """
     AIO Pika based message sender.
     """
@@ -118,7 +118,7 @@ class MessageSender(AMQPPublish, bases.MessageSender):
         )
 
 
-class MessagePublisher(AMQPPublish, bases.MessagePublisher):
+class FanOutSender(AMQPPublish, bases.MessageSender):
     """
     AIO Pika based message sender/publisher.
     """
@@ -132,7 +132,7 @@ class MessagePublisher(AMQPPublish, bases.MessagePublisher):
         )
 
 
-class AMQPListener(AMQPBase):
+class Receiver(AMQPBase, bases.MessageReceiver):
     """
     AIO Pika based message receiver
 
@@ -181,17 +181,9 @@ class AMQPListener(AMQPBase):
                     )
 
 
-class MessageReceiver(AMQPListener, bases.MessageReceiver):
+class FanOutReceiver(Receiver):
     """
-    AIO Pika based message receiver
-    """
-
-    __slots__ = ()
-
-
-class MessageSubscriber(AMQPListener, bases.MessageSubscriber):
-    """
-    AIO Pika based message subscriber
+    AIO Pika based message receiver that creates a temporary listening queue
     """
 
     __slots__ = ()
