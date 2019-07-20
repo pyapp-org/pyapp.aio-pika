@@ -127,6 +127,7 @@ class FanOutSender(AMQPPublish, bases.MessageSender):
 
     async def open(self):
         await super().open()
+
         self._exchange = await self._channel.declare_exchange(
             self.queue_name, type=ExchangeType.FANOUT, durable=True
         )
@@ -159,17 +160,16 @@ class Receiver(AMQPBase, bases.MessageReceiver):
         self.queue_name = queue_name
         self.prefetch_count = prefetch_count
 
-    async def open(self):
-        await super().open()
-        await self._channel.set_qos(prefetch_count=self.prefetch_count)
-
     async def queue(self):
         return await self._channel.declare_queue(self.queue_name)
 
-    async def listen(self):
+    async def open(self):
         """
         Listen for messages.
         """
+        await super().open()
+        await self._channel.set_qos(prefetch_count=self.prefetch_count)
+
         queue = await self.queue()
         await queue.bind(self.queue_name, self.routing_key)
 
